@@ -12,8 +12,8 @@ import {
   Platform,
   useColorScheme,
 } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
 import ApiService from '../services/api.service';
 import StorageService from '../services/storage.service';
 import AuthService from '../services/auth.service';
@@ -29,7 +29,7 @@ const HomeScreen: React.FC = () => {
 
   const handleAnalyze = async () => {
     if (!keyword.trim()) {
-      Alert.alert('L�', '�` ���| �%t�8�.');
+      Alert.alert('알림', '분석할 키워드를 입력해주세요.');
       return;
     }
 
@@ -42,7 +42,7 @@ const HomeScreen: React.FC = () => {
       if (result.success && result.data) {
         const user = AuthService.getCurrentUser();
         if (!user) {
-          Alert.alert('$X', '��� �| >D  Ƶ��.');
+          Alert.alert('오류', '사용자 정보를 찾을 수 없습니다.');
           return;
         }
 
@@ -59,14 +59,14 @@ const HomeScreen: React.FC = () => {
         await StorageService.saveReport(report);
         setAnalysisResult(report);
         
-        Alert.alert('1�', '�t D�ȵ��!', [
-          { text: 'Ux', style: 'default' }
+        Alert.alert('성공', '분석이 완료되었습니다!', [
+          { text: '확인', style: 'default' }
         ]);
       } else {
-        Alert.alert('$X', result.error || '�� �(����.');
+        Alert.alert('오류', result.error || '분석에 실패했습니다.');
       }
     } catch (error) {
-      Alert.alert('$X', '� �� �(����.');
+      Alert.alert('오류', '네트워크 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -97,7 +97,7 @@ const HomeScreen: React.FC = () => {
           isDarkMode && styles.textDark,
         ]}
       >
-        {REPORT_LENGTHS[value].chars}�
+        {REPORT_LENGTHS[value].chars}자
       </Text>
     </TouchableOpacity>
   );
@@ -113,38 +113,41 @@ const HomeScreen: React.FC = () => {
           style={styles.header}
         >
           <Icon name="reddit" size={50} color="#ffffff" />
-          <Text style={styles.headerTitle}>Reddit � �</Text>
+          <Text style={styles.headerTitle}>Reddit 분석</Text>
           <Text style={styles.headerSubtitle}>
-            \� �| ��<\ �X� �i��
+            키워드로 커뮤니티를 분석하세요
           </Text>
         </LinearGradient>
 
         <View style={[styles.content, isDarkMode && styles.contentDark]}>
           <View style={styles.inputSection}>
             <Text style={[styles.label, isDarkMode && styles.textDark]}>
-              ��` ���
+              분석할 키워드
             </Text>
             <TextInput
               style={[styles.input, isDarkMode && styles.inputDark]}
-              placeholder=": Tesla 2025 news, Apple stock"
+              placeholder="예: Tesla 2025 news, Apple stock"
               placeholderTextColor={isDarkMode ? '#888' : '#999'}
               value={keyword}
               onChangeText={setKeyword}
               editable={!isLoading}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
             />
             <Text style={[styles.helperText, isDarkMode && styles.helperTextDark]}>
-              �� ��ܔ |\(,)\ l�X8�
+              여러 키워드는 콤마(,)로 구분하세요
             </Text>
           </View>
 
           <View style={styles.lengthSection}>
             <Text style={[styles.label, isDarkMode && styles.textDark]}>
-              �� 8t
+              보고서 길이
             </Text>
             <View style={styles.lengthButtons}>
-              <ReportLengthButton value="simple" label="�" />
-              <ReportLengthButton value="moderate" label="��" />
-              <ReportLengthButton value="detailed" label="�8X�" />
+              <ReportLengthButton value="simple" label="간단" />
+              <ReportLengthButton value="moderate" label="보통" />
+              <ReportLengthButton value="detailed" label="상세" />
             </View>
           </View>
 
@@ -167,12 +170,12 @@ const HomeScreen: React.FC = () => {
               {isLoading ? (
                 <>
                   <ActivityIndicator color="#ffffff" />
-                  <Text style={styles.analyzeButtonText}>� ...</Text>
+                  <Text style={styles.analyzeButtonText}>분석 중...</Text>
                 </>
               ) : (
                 <>
                   <Icon name="search" size={24} color="#ffffff" />
-                  <Text style={styles.analyzeButtonText}>� & �</Text>
+                  <Text style={styles.analyzeButtonText}>분석 시작</Text>
                 </>
               )}
             </LinearGradient>
@@ -182,20 +185,20 @@ const HomeScreen: React.FC = () => {
             <View style={[styles.loadingCard, isDarkMode && styles.cardDark]}>
               <ActivityIndicator size="large" color="#667eea" />
               <Text style={[styles.loadingTitle, isDarkMode && styles.textDark]}>
-                Reddit� �| �X� ����...
+                Reddit에서 정보를 수집하고 있습니다...
               </Text>
               <View style={styles.loadingSteps}>
                 <Text style={[styles.loadingStep, isDarkMode && styles.textDark]}>
-                  = Reddit �� 
+                  ✓ Reddit 게시물 검색 중
                 </Text>
                 <Text style={[styles.loadingStep, isDarkMode && styles.textDark]}>
-                  =� pt0 � 
+                  ✓ 관련 데이터 수집 중
                 </Text>
                 <Text style={[styles.loadingStep, isDarkMode && styles.textDark]}>
-                  > GPT-4 � 
+                  → GPT-4로 분석 중
                 </Text>
                 <Text style={[styles.loadingStep, isDarkMode && styles.textDark]}>
-                  =� �� �1 
+                  ⏳ 보고서 생성 중
                 </Text>
               </View>
             </View>
@@ -206,16 +209,16 @@ const HomeScreen: React.FC = () => {
               <View style={styles.resultHeader}>
                 <Icon name="check-circle" size={24} color="#48bb78" />
                 <Text style={[styles.resultTitle, isDarkMode && styles.textDark]}>
-                  � D�
+                  분석 완료
                 </Text>
               </View>
               
               <View style={styles.resultMeta}>
                 <Text style={[styles.metaText, isDarkMode && styles.textDark]}>
-                  =� {analysisResult.metadata.charCount}�
+                  총 {analysisResult.metadata.charCount}자
                 </Text>
                 <Text style={[styles.metaText, isDarkMode && styles.textDark]}>
-                  � {(analysisResult.metadata.processingTime / 1000).toFixed(1)}
+                  소요시간 {(analysisResult.metadata.processingTime / 1000).toFixed(1)}초
                 </Text>
               </View>
 
@@ -227,9 +230,9 @@ const HomeScreen: React.FC = () => {
 
               <TouchableOpacity
                 style={styles.viewFullButton}
-                onPress={() => Alert.alert('� ��� �� �� UxX8�')}
+                onPress={() => Alert.alert('보고서 탭에서 전체 내용을 확인하세요')}
               >
-                <Text style={styles.viewFullButtonText}>� �� �0</Text>
+                <Text style={styles.viewFullButtonText}>전체 보고서 보기</Text>
                 <Icon name="arrow-forward" size={20} color="#667eea" />
               </TouchableOpacity>
             </View>
@@ -295,6 +298,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    minHeight: 100,
   },
   inputDark: {
     backgroundColor: '#2d3748',

@@ -125,3 +125,24 @@ class PostData(BaseModel):
     title: Optional[str]
     content: Optional[str]
     url: Optional[str]
+
+# 새로운 사용자 인증 모델 (Supabase용)
+class UserRegisterRequest(BaseModel):
+    nickname: str
+
+class UserLoginRequest(BaseModel):
+    nickname: str
+
+class UserAuthResponse(BaseModel):
+    id: str
+    nickname: str
+    status: str  # "approved" or "pending"
+    created_at: Optional[str]
+    last_access: Optional[str]
+
+class SupabaseUserResponse(BaseModel):
+    id: str
+    nickname: str
+    approval_status: str  # "Y" or "N"
+    created_at: str
+    last_access: str

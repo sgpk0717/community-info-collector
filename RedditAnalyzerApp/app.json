@@ -1,4 +1,19 @@
 {
-  "name": "RedditAnalyzerApp",
-  "displayName": "RedditAnalyzerApp"
+  "expo": {
+    "name": "RedditAnalyzerApp",
+    "slug": "reddit-analyzer-app",
+    "version": "1.0.0",
+    "platforms": ["ios", "android"],
+    "orientation": "portrait",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.redditanalyzer.app"
+    },
+    "android": {
+      "package": "com.redditanalyzer.app"
+    }
+  }
 }

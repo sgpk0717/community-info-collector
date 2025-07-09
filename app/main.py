@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.endpoints import router
 from app.api.advanced_endpoints import router as advanced_router
 from app.api.schedule_endpoints import router as schedule_router
+from app.api.user_endpoints import router as user_router
 from app.db.base import engine, Base
 import logging
 
@@ -28,6 +29,7 @@ app.add_middleware(
 app.include_router(router, prefix="/api/v1", tags=["community"])
 app.include_router(advanced_router, prefix="/api/v1", tags=["advanced"])
 app.include_router(schedule_router, prefix="/api/v1", tags=["schedule"])
+app.include_router(user_router, prefix="/api/v1/users", tags=["users"])
 
 @app.get("/")
 async def root():

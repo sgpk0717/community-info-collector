@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'https://your-api-endpoint.com'; // TODO: 4Ì 8¤ URL\ À½
+export const API_BASE_URL = 'http://192.168.0.83:8000'; // TODO: 4ï¿½ 8ï¿½ URL\ ï¿½ï¿½
 
 export const STORAGE_KEYS = {
   USER: '@reddit_analyzer_user',
@@ -7,10 +7,10 @@ export const STORAGE_KEYS = {
   SETTINGS: '@reddit_analyzer_settings',
 };
 
-export const DEFAULT_SCHEDULE_INTERVAL = 360; // 6Ü („ è)
+export const DEFAULT_SCHEDULE_INTERVAL = 360; // 6ï¿½ (ï¿½ ï¿½)
 
 export const REPORT_LENGTHS = {
-  simple: { label: 'èˆ', chars: 1200 },
-  moderate: { label: 'ùˆ', chars: 1800 },
-  detailed: { label: 'Á8XŒ', chars: 2400 },
+  simple: { label: 'ï¿½', chars: 1200 },
+  moderate: { label: 'ï¿½ï¿½', chars: 1800 },
+  detailed: { label: 'ï¿½8Xï¿½', chars: 2400 },
 };

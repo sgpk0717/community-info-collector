@@ -61,8 +61,71 @@ class ApiService {
     }
   }
 
-  // 사용자 관련 API
-  async registerUser(deviceId: string, name?: string, pushToken?: string): Promise<ApiResponse> {
+  // 사용자 관련 API (백엔드 API 호출)
+  async registerUser(nickname: string): Promise<ApiResponse> {
+    try {
+      const response = await this.api.post('/api/v1/users/register', {
+        nickname: nickname,
+      });
+
+      return {
+        success: true,
+        data: response.data.data,
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 409) {
+          return {
+            success: false,
+            error: 'NICKNAME_EXISTS',
+          };
+        }
+        return {
+          success: false,
+          error: error.response?.data?.detail || '사용자 등록에 실패했습니다',
+        };
+      }
+      
+      return {
+        success: false,
+        error: '사용자 등록에 실패했습니다',
+      };
+    }
+  }
+
+  async loginUser(nickname: string): Promise<ApiResponse> {
+    try {
+      const response = await this.api.post('/api/v1/users/login', {
+        nickname: nickname,
+      });
+
+      return {
+        success: true,
+        data: response.data.data,
+      };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          return {
+            success: false,
+            error: 'USER_NOT_FOUND',
+          };
+        }
+        return {
+          success: false,
+          error: error.response?.data?.detail || 'UNKNOWN_ERROR',
+        };
+      }
+      
+      return {
+        success: false,
+        error: '로그인에 실패했습니다',
+      };
+    }
+  }
+
+  // 기존 사용자 등록 메서드 (하위 호환성을 위해 유지)
+  async registerDeviceUser(deviceId: string, name?: string, pushToken?: string): Promise<ApiResponse> {
     try {
       const response = await this.api.post('/api/v1/schedule/users', {
         device_id: deviceId,
