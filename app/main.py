@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.endpoints import router
 from app.api.advanced_endpoints import router as advanced_router
+from app.api.schedule_endpoints import router as schedule_router
 from app.db.base import engine, Base
 import logging
 
@@ -26,6 +27,7 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api/v1", tags=["community"])
 app.include_router(advanced_router, prefix="/api/v1", tags=["advanced"])
+app.include_router(schedule_router, prefix="/api/v1", tags=["schedule"])
 
 @app.get("/")
 async def root():
@@ -35,6 +37,20 @@ async def root():
         "docs": "/docs",
         "features": {
             "standard": "Reddit, Twitter, Threads API",
-            "advanced": "LinkedIn, Discord, HackerNews, Dynamic Web Scraping"
+            "advanced": "LinkedIn, Discord, HackerNews, Dynamic Web Scraping",
+            "scheduling": "Automated report generation with push notifications"
         }
     }
+
+# 스케줄러 서비스 시작
+@app.on_event("startup")
+async def startup_event():
+    from app.services.scheduler_service import scheduler_service
+    scheduler_service.start()
+    logger.info("Scheduler service started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    from app.services.scheduler_service import scheduler_service
+    scheduler_service.stop()
+    logger.info("Scheduler service stopped")

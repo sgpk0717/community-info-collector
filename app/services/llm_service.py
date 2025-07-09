@@ -14,7 +14,7 @@ class LLMService:
             self.openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    async def generate_report(self, query: str, posts: List[PostBase]) -> dict:
+    async def generate_report(self, query: str, posts: List[PostBase], report_length: str = "moderate") -> dict:
         if not self.openai_client:
             logger.warning("OpenAI client not initialized")
             return {
@@ -22,7 +22,47 @@ class LLMService:
                 "full_report": "API 키를 설정해주세요."
             }
         
-        posts_text = self._format_posts_for_llm(posts)
+        # 보고서 길이에 따른 설정
+        report_configs = {
+            "simple": {
+                "max_tokens": 800,
+                "format": """
+1. 핵심 요약 (2-3문장)
+2. 주요 포인트 3가지
+3. 결론
+""",
+                "posts_limit": 10
+            },
+            "moderate": {
+                "max_tokens": 1500,
+                "format": """
+1. 요약 (2-3문장)
+2. 주요 발견사항
+3. 트렌드 및 패턴
+4. 핵심 인사이트
+5. 추가 조사가 필요한 부분
+""",
+                "posts_limit": 20
+            },
+            "detailed": {
+                "max_tokens": 3000,
+                "format": """
+1. 종합 요약
+2. 상세 분석
+   - 주요 발견사항
+   - 세부 트렌드 분석
+   - 감정 분석
+3. 핵심 인사이트
+4. 시사점 및 제언
+5. 추가 조사 권장사항
+6. 참고할 만한 구체적 게시물
+""",
+                "posts_limit": 30
+            }
+        }
+        
+        config = report_configs.get(report_length, report_configs["moderate"])
+        posts_text = self._format_posts_for_llm(posts, config['posts_limit'])
         
         try:
             system_prompt = """당신은 소셜 미디어 데이터를 분석하고 종합하는 전문가입니다. 
@@ -35,13 +75,7 @@ class LLMService:
 {posts_text}
 
 위 게시물들을 분석하여 다음 형식으로 보고서를 작성해주세요:
-
-1. 요약 (2-3문장)
-2. 주요 발견사항
-3. 트렌드 및 패턴
-4. 핵심 인사이트
-5. 추가 조사가 필요한 부분
-"""
+{config['format']}"""
             
             response = self.openai_client.chat.completions.create(
                 model="gpt-4.1",
@@ -50,7 +84,7 @@ class LLMService:
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=config['max_tokens']
             )
             
             full_report = response.choices[0].message.content
@@ -68,9 +102,9 @@ class LLMService:
                 "full_report": str(e)
             }
     
-    def _format_posts_for_llm(self, posts: List[PostBase]) -> str:
+    def _format_posts_for_llm(self, posts: List[PostBase], limit: int = 20) -> str:
         formatted_posts = []
-        for i, post in enumerate(posts[:20], 1):
+        for i, post in enumerate(posts[:limit], 1):
             post_text = f"\n[게시물 {i} - {post.source}]\n"
             if post.title:
                 post_text += f"제목: {post.title}\n"
