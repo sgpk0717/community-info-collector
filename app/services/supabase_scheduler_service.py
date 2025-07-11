@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from app.services.supabase_schedule_service import supabase_schedule_service
 from app.services.reddit_service import RedditService
 from app.services.llm_service import LLMService
@@ -15,6 +16,7 @@ from app.services.supabase_reports_service import supabase_reports_service
 from app.services.verified_analysis_service import VerifiedAnalysisService
 import uuid
 from typing import Optional
+from asyncio import Queue
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,9 @@ class SupabaseSchedulerService:
         # 메모리 기반 실행 추적 (서버 재시작 시 초기화됨)
         self._executing_schedules = set()
         self._is_running = False
+        # 실행 대기 큐
+        self._schedule_queue = Queue()
+        self._worker_task = None
         
     def get_executing_schedules(self):
         """현재 실행 중인 스케줄 ID 목록 반환 (int 타입으로 보장)"""
@@ -41,10 +46,10 @@ class SupabaseSchedulerService:
         # 서버 시작 시 모든 is_executing 플래그 초기화
         await self._reset_all_executing_flags()
         
-        # 1분마다 실행되는 job 추가
+        # 매시 정각에 실행되는 job 추가 (0분에만 실행)
         self.scheduler.add_job(
             self._check_and_execute_schedules,
-            IntervalTrigger(minutes=1),
+            CronTrigger(minute=0),  # 매시 0분에 실행
             id="check_schedules",
             name="Check and execute schedules",
             replace_existing=True
@@ -52,13 +57,26 @@ class SupabaseSchedulerService:
         
         self.scheduler.start()
         self._is_running = True
-        logger.info("🚀 스케줄러 서비스 시작 | 체크 주기: 1분")
+        
+        # 워커 태스크 시작
+        self._worker_task = asyncio.create_task(self._schedule_worker())
+        
+        logger.info("🚀 스케줄러 서비스 시작 | 체크 주기: 매시 정각 | 큐 방식 처리")
         
     async def stop(self):
         """스케줄러 중지"""
         if self._is_running:
             self.scheduler.shutdown(wait=False)
             self._is_running = False
+            
+            # 워커 태스크 중지
+            if self._worker_task:
+                self._worker_task.cancel()
+                try:
+                    await self._worker_task
+                except asyncio.CancelledError:
+                    pass
+            
             # 중지 시 모든 is_executing 플래그 초기화
             await self._reset_all_executing_flags()
             logger.info("Supabase Scheduler service stopped")
@@ -75,15 +93,13 @@ class SupabaseSchedulerService:
             logger.error(f"Error resetting executing flags: {e}")
             
     async def _check_and_execute_schedules(self):
-        """실행해야 할 스케줄 확인 및 실행"""
+        """실행해야 할 스케줄 확인 및 큐에 추가"""
         current_time = datetime.utcnow()
         # 한국 시간으로 표시
         import pytz
         kst = pytz.timezone('Asia/Seoul')
         current_kst = current_time.replace(tzinfo=pytz.UTC).astimezone(kst)
         logger.debug(f"⏰ 스케줄 체크 시작 | 시간: {current_kst.strftime('%H:%M:%S')} KST (UTC: {current_time.strftime('%H:%M:%S')})")
-        if self.get_executing_schedules():
-            logger.debug(f"   현재 실행 중: {self.get_executing_schedules()}")
         
         try:
             # 실행 대기 중인 스케줄 조회 (is_executing=False인 것만)
@@ -92,6 +108,7 @@ class SupabaseSchedulerService:
             if schedules:
                 logger.info(f"📋 검사할 스케줄: {len(schedules)}개")
                 
+                queued_count = 0
                 for schedule in schedules:
                     schedule_id = int(schedule["id"])
                     
@@ -110,17 +127,47 @@ class SupabaseSchedulerService:
                             logger.info(f"🔒 스케줄 {schedule_id} 락 획득 성공 | 키워드: {schedule.get('keyword')}")
                             # 메모리에도 추가
                             self._executing_schedules.add(schedule_id)
-                            # 비동기로 실행
-                            asyncio.create_task(self._execute_schedule_with_lock(schedule))
+                            # 큐에 추가
+                            await self._schedule_queue.put(schedule)
+                            queued_count += 1
                         else:
                             logger.debug(f"⏳ 스케줄 {schedule_id} 다른 곳에서 실행 중")
                     else:
                         # 한국 시간으로 표시
                         next_run_kst = next_run.replace(tzinfo=pytz.UTC).astimezone(kst)
                         logger.debug(f"⏱️ 스케줄 {schedule_id} 아직 실행 시간 아님 | 예정: {next_run_kst.strftime('%H:%M')} KST")
+                
+                if queued_count > 0:
+                    logger.info(f"📥 {queued_count}개 스케줄을 실행 큐에 추가 | 큐 크기: {self._schedule_queue.qsize()}")
                         
         except Exception as e:
             logger.error(f"[SCHEDULER] Error checking schedules: {e}")
+    
+    async def _schedule_worker(self):
+        """큐에서 스케줄을 꺼내 실행하는 워커"""
+        logger.info("📦 스케줄 워커 시작")
+        
+        while self._is_running:
+            try:
+                # 큐에서 스케줄 가져오기 (최대 1초 대기)
+                try:
+                    schedule = await asyncio.wait_for(self._schedule_queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    continue
+                
+                schedule_id = int(schedule["id"])
+                logger.info(f"🏃 큐에서 스케줄 {schedule_id} 실행 시작 | 키워드: {schedule.get('keyword')} | 남은 큐: {self._schedule_queue.qsize()}")
+                
+                # 스케줄 실행
+                await self._execute_schedule_with_lock(schedule)
+                
+            except asyncio.CancelledError:
+                logger.info("📦 스케줄 워커 중지 요청")
+                break
+            except Exception as e:
+                logger.error(f"[WORKER] Error in schedule worker: {e}")
+        
+        logger.info("📦 스케줄 워커 종료")
             
     async def _execute_schedule_with_lock(self, schedule):
         """락을 획득한 스케줄 실행 (락 해제 보장)"""
@@ -175,6 +222,7 @@ class SupabaseSchedulerService:
                     "query_text": schedule["keyword"],  # search_query 대신 query_text 사용
                     "summary": report_result.get("summary", "요약 없음"),
                     "full_report": report_result.get("full_report", "보고서 없음"),
+                    "posts_collected": len(posts),  # 수집된 게시물 수 추가
                     "search_metadata": {
                         "sources": ["reddit"],
                         "posts_count": len(posts),
