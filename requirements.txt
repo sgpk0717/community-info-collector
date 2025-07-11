@@ -33,3 +33,9 @@ google-auth-httplib2==0.2.0
 
 # Supabase
 supabase==2.9.1
+
+# Push notifications
+exponent-server-sdk==2.1.0
+
+# Timezone support
+pytz==2024.2
