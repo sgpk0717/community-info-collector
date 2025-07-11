@@ -33,18 +33,26 @@ const ScheduleCreateScreen: React.FC = () => {
   const isDarkMode = useColorScheme() === 'dark';
   const { user } = useAuth();
   
-  // 다음 정시 계산
-  const getNextHour = () => {
+  // 다음 10분 단위 시간 계산
+  const getNextTenMinutes = () => {
     const now = new Date();
     const next = new Date(now);
-    next.setHours(now.getHours() + 1, 0, 0, 0);
+    const minutes = next.getMinutes();
+    const nextMinutes = Math.ceil((minutes + 5) / 10) * 10; // 5분 여유 추가
+    
+    if (nextMinutes >= 60) {
+      next.setHours(next.getHours() + 1, nextMinutes - 60, 0, 0);
+    } else {
+      next.setMinutes(nextMinutes, 0, 0);
+    }
+    
     return next;
   };
   
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>({
-    intervalMinutes: 60, // 기본값을 1시간으로 설정
+    intervalMinutes: 10, // 기본값을 10분으로 설정
     keywords: [''],
-    startTime: getNextHour(),
+    startTime: getNextTenMinutes(),
     notificationEnabled: false,
     totalRuns: 3,
     customRuns: undefined,
@@ -160,9 +168,9 @@ const ScheduleCreateScreen: React.FC = () => {
   // 폼 초기화
   const resetForm = () => {
     setScheduleForm({
-      intervalMinutes: 60, // 기본값을 1시간으로 설정
+      intervalMinutes: 10, // 기본값을 10분으로 설정
       keywords: [''],
-      startTime: getNextHour(),
+      startTime: getNextTenMinutes(),
       notificationEnabled: false,
       totalRuns: 3,
       customRuns: undefined,
@@ -293,7 +301,36 @@ const ScheduleCreateScreen: React.FC = () => {
               })}
             </View>
             
-            {/* 분 선택 제거 - 정시만 선택 가능 */}
+            {/* 10분 단위 분 선택 */}
+            <Text style={[styles.customTimePickerSectionTitle, isDarkMode && styles.textDark, { marginTop: 20 }]}>분</Text>
+            <View style={styles.customTimePickerGrid}>
+              {[0, 10, 20, 30, 40, 50].map((minute) => {
+                const isSelected = minute === tempMinute;
+                
+                return (
+                  <TouchableOpacity
+                    key={minute}
+                    style={[
+                      styles.customTimePickerItem,
+                      isDarkMode && styles.customTimePickerItemDark,
+                      isSelected && styles.customTimePickerItemSelected,
+                      isSelected && isDarkMode && { backgroundColor: '#2a3040' },
+                    ]}
+                    onPress={() => setTempMinute(minute)}
+                  >
+                    <Text
+                      style={[
+                        styles.customTimePickerItemText,
+                        isDarkMode && styles.textDark,
+                        isSelected && styles.customTimePickerItemTextSelected,
+                      ]}
+                    >
+                      {minute.toString().padStart(2, '0')}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </ScrollView>
           
             <TouchableOpacity
@@ -301,7 +338,7 @@ const ScheduleCreateScreen: React.FC = () => {
               onPress={() => {
                 const newDateTime = new Date(scheduleForm.startTime);
                 newDateTime.setHours(tempHour);
-                newDateTime.setMinutes(0); // 정시로 설정
+                newDateTime.setMinutes(tempMinute); // 10분 단위로 설정
                 newDateTime.setSeconds(0);
                 newDateTime.setMilliseconds(0);
                 setScheduleForm({ ...scheduleForm, startTime: newDateTime });
@@ -401,10 +438,10 @@ const ScheduleCreateScreen: React.FC = () => {
             실행 간격
           </Text>
           <View style={styles.intervalButtons}>
+            <IntervalButton minutes={10} label="10분" />
+            <IntervalButton minutes={30} label="30분" />
             <IntervalButton minutes={60} label="1시간" />
             <IntervalButton minutes={180} label="3시간" />
-            <IntervalButton minutes={360} label="6시간" />
-            <IntervalButton minutes={720} label="12시간" />
           </View>
         </View>
 
@@ -433,9 +470,10 @@ const ScheduleCreateScreen: React.FC = () => {
           >
             <Icon name="schedule" size={20} color="#667eea" />
             <Text style={[styles.timeButtonText, isDarkMode && styles.textDark]}>
-              {/* 정시 표시 */}
+              {/* 시간:분 표시 */}
               {scheduleForm.startTime.toLocaleTimeString('ko-KR', { 
                 hour: '2-digit',
+                minute: '2-digit',
                 hour12: true 
               })}
             </Text>

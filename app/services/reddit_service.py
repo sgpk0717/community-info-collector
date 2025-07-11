@@ -10,6 +10,8 @@ import ssl
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import openai
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +56,9 @@ class RedditService:
         
         posts = []
         try:
-            # 한글 검색어를 위한 키워드 매핑
+            # 한글 검색어를 위한 키워드 매핑 (확장)
             keyword_mapping = {
+                # 기업
                 "테슬라": ["Tesla", "TSLA"],
                 "애플": ["Apple", "AAPL"],
                 "삼성": ["Samsung"],
@@ -63,11 +66,33 @@ class RedditService:
                 "아마존": ["Amazon", "AMZN"],
                 "메타": ["Meta", "META", "Facebook"],
                 "엔비디아": ["NVIDIA", "NVDA"],
+                
+                # 인물
+                "일런머스크": ["Elon Musk", "Musk"],
+                "트럼프": ["Trump", "Donald Trump"],
+                "바이든": ["Biden"],
+                
+                # 뉴스/정보
                 "뉴스": ["news", "update", "announcement"],
+                "최신뉴스": ["latest news", "breaking news", "recent news"],
+                "속보": ["breaking news", "breaking"],
+                "최신": ["latest", "recent", "new"],
+                
+                # 주식/금융
                 "주식": ["stock", "shares", "investment"],
                 "주가": ["stock price", "share price"],
                 "전망": ["forecast", "prediction", "outlook"],
                 "분석": ["analysis", "review"],
+                
+                # 여행/장소
+                "다낭": ["Da Nang", "Danang"],
+                "헬스장": ["gym", "fitness center"],
+                "숙소": ["hotel", "accommodation"],
+                
+                # 시간
+                "시간": ["hour", "hours"],
+                "이내": ["within", "in"],
+                "최근": ["recent", "latest"],
             }
             
             # 한글 키워드를 영어로 변환
@@ -86,6 +111,33 @@ class RedditService:
             if not search_queries or query == original_query:
                 search_queries.append(query)
             
+            # 한글이 포함된 경우 OpenAI를 사용해 번역
+            if re.search('[가-힣]', original_query) and len(search_queries) < 6:
+                try:
+                    openai.api_key = settings.OPENAI_API_KEY
+                    response = openai.chat.completions.create(
+                        model="gpt-4.1",
+                        messages=[
+                            {"role": "system", "content": "You are a translator. Translate the Korean search query to English. Provide 3 different translations that would work well for Reddit search. Return only the translations separated by '|' without any explanation."},
+                            {"role": "user", "content": original_query}
+                        ],
+                        temperature=0.3,
+                        max_tokens=100
+                    )
+                    
+                    translations = response.choices[0].message.content.strip().split('|')
+                    for trans in translations:
+                        trans = trans.strip()
+                        if trans and trans not in search_queries:
+                            search_queries.append(trans)
+                    
+                    logger.info(f"OpenAI translations added: {translations}")
+                except Exception as e:
+                    logger.warning(f"OpenAI translation failed: {e}")
+            
+            # 최대 6개까지만 사용
+            search_queries = search_queries[:6]
+            
             logger.info(f"Original query: {original_query}")
             logger.info(f"Search queries: {search_queries}")
             
@@ -93,7 +145,7 @@ class RedditService:
             all_submissions = []
             seen_ids = set()
             
-            for search_query in search_queries[:3]:  # 최대 3개 쿼리만 실행
+            for search_query in search_queries:  # 모든 쿼리 실행 (최대 6개)
                 try:
                     logger.debug(f"Searching Reddit with query: {search_query}")
                     submissions = list(self.reddit.subreddit("all").search(

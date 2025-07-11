@@ -46,10 +46,10 @@ class SupabaseSchedulerService:
         # 서버 시작 시 모든 is_executing 플래그 초기화
         await self._reset_all_executing_flags()
         
-        # 매시 정각에 실행되는 job 추가 (0분에만 실행)
+        # 10분마다 실행되는 job 추가 (0, 10, 20, 30, 40, 50분)
         self.scheduler.add_job(
             self._check_and_execute_schedules,
-            CronTrigger(minute=0),  # 매시 0분에 실행
+            CronTrigger(minute='0,10,20,30,40,50'),  # 10분 단위로 실행
             id="check_schedules",
             name="Check and execute schedules",
             replace_existing=True
@@ -61,7 +61,7 @@ class SupabaseSchedulerService:
         # 워커 태스크 시작
         self._worker_task = asyncio.create_task(self._schedule_worker())
         
-        logger.info("🚀 스케줄러 서비스 시작 | 체크 주기: 매시 정각 | 큐 방식 처리")
+        logger.info("🚀 스케줄러 서비스 시작 | 체크 주기: 10분 단위 | 큐 방식 처리")
         
     async def stop(self):
         """스케줄러 중지"""
