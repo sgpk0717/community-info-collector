@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import ApiService from '../services/api.service';
+import AuthService from '../services/auth.service';
+import StorageService from '../services/storage.service';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -31,10 +33,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const checkAuthStatus = async () => {
+    console.log('AuthContext: checkAuthStatus 시작');
     try {
-      // 여기에 저장된 사용자 정보 확인 로직 추가
-      // 예: AsyncStorage에서 사용자 정보 확인
+      // AuthService 초기화 및 저장된 사용자 정보 확인
+      console.log('AuthContext: AuthService.initialize() 호출');
+      await AuthService.initialize();
+      console.log('AuthContext: AuthService.initialize() 완료');
+      
+      const currentUser = AuthService.getCurrentUser();
+      console.log('AuthContext: currentUser:', currentUser);
+      
+      if (currentUser && currentUser.nickname) {
+        // 기존 사용자가 있고 닉네임이 있으면 로그인 상태로 설정
+        setUser(currentUser);
+        setIsAuthenticated(true);
+        console.log('AuthContext: 인증됨');
+      } else {
+        console.log('AuthContext: 인증되지 않음');
+      }
+      
       setIsLoading(false);
+      console.log('AuthContext: isLoading false로 설정');
     } catch (error) {
       console.error('Auth check failed:', error);
       setIsLoading(false);
@@ -47,7 +66,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (result.success) {
         if (result.data.status === 'approved') {
-          setUser(result.data);
+          // AuthService에도 닉네임 저장
+          await AuthService.updateUserNickname(nickname);
+          setUser({ ...result.data, nickname });
           setIsAuthenticated(true);
           return true;
         } else if (result.data.status === 'pending') {

@@ -13,23 +13,57 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
-import StorageService from '../services/storage.service';
+import ApiService from '../services/api.service';
+import AuthService from '../services/auth.service';
+import ReportRenderer from '../components/ReportRenderer';
 import { Report } from '../types';
 
 const ReportsScreen: React.FC = () => {
   const isDarkMode = useColorScheme() === 'dark';
-  const [reports, setReports] = useState<Report[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadReports();
   }, []);
 
   const loadReports = async () => {
-    const savedReports = await StorageService.getReports();
-    setReports(savedReports);
+    try {
+      setLoading(true);
+      const user = AuthService.getCurrentUser();
+      
+      console.log('🐛 [DEBUG] ReportsScreen - Current user:', user);
+      console.log('🐛 [DEBUG] ReportsScreen - User nickname:', user?.nickname);
+      
+      if (!user || !user.nickname) {
+        console.log('🐛 [DEBUG] ReportsScreen - No user or nickname found');
+        Alert.alert('오류', '로그인이 필요합니다.');
+        setReports([]);
+        return;
+      }
+
+      console.log('🐛 [DEBUG] ReportsScreen - Fetching reports for:', user.nickname);
+      const result = await ApiService.getUserReports(user.nickname);
+      console.log('🐛 [DEBUG] ReportsScreen - API result:', result);
+      
+      if (result.success) {
+        setReports(result.data || []);
+      } else {
+        Alert.alert('오류', result.error || '보고서를 불러오는데 실패했습니다.');
+        setReports([]);
+      }
+    } catch (error) {
+      console.error('Load reports error:', error);
+      Alert.alert('오류', '보고서를 불러오는데 실패했습니다.');
+      setReports([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onRefresh = useCallback(async () => {
@@ -48,9 +82,68 @@ const ReportsScreen: React.FC = () => {
           text: '삭제',
           style: 'destructive',
           onPress: async () => {
-            await StorageService.deleteReport(reportId);
-            await loadReports();
-            Alert.alert('성공', '보고서가 삭제되었습니다.');
+            try {
+              const result = await ApiService.deleteReport(reportId);
+              if (result.success) {
+                await loadReports();
+                Alert.alert('성공', '보고서가 삭제되었습니다.');
+              } else {
+                Alert.alert('오류', result.error || '보고서 삭제에 실패했습니다.');
+              }
+            } catch (error) {
+              console.error('Delete report error:', error);
+              Alert.alert('오류', '보고서 삭제에 실패했습니다.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const toggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode);
+    setSelectedReportIds(new Set());
+  };
+
+  const toggleReportSelection = (reportId: string) => {
+    const newSelected = new Set(selectedReportIds);
+    if (newSelected.has(reportId)) {
+      newSelected.delete(reportId);
+    } else {
+      newSelected.add(reportId);
+    }
+    setSelectedReportIds(newSelected);
+  };
+
+  const deleteSelectedReports = async () => {
+    if (selectedReportIds.size === 0) {
+      Alert.alert('알림', '삭제할 보고서를 선택해주세요.');
+      return;
+    }
+
+    Alert.alert(
+      '다중 삭제',
+      `선택한 ${selectedReportIds.size}개의 보고서를 삭제하시겠습니까?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const deletePromises = Array.from(selectedReportIds).map(id =>
+                ApiService.deleteReport(id)
+              );
+              await Promise.all(deletePromises);
+              
+              await loadReports();
+              Alert.alert('성공', `${selectedReportIds.size}개의 보고서가 삭제되었습니다.`);
+              setIsSelectionMode(false);
+              setSelectedReportIds(new Set());
+            } catch (error) {
+              console.error('Delete multiple reports error:', error);
+              Alert.alert('오류', '보고서 삭제에 실패했습니다.');
+            }
           },
         },
       ]
@@ -62,8 +155,8 @@ const ReportsScreen: React.FC = () => {
     setModalVisible(true);
   };
 
-  const formatDate = (date: Date | string) => {
-    const d = typeof date === 'string' ? new Date(date) : date;
+  const formatDate = (dateString: string) => {
+    const d = new Date(dateString);
     return d.toLocaleDateString('ko-KR', {
       year: 'numeric',
       month: 'long',
@@ -73,8 +166,8 @@ const ReportsScreen: React.FC = () => {
     });
   };
 
-  const getTimeDiff = (date: Date | string) => {
-    const d = typeof date === 'string' ? new Date(date) : date;
+  const getTimeDiff = (dateString: string) => {
+    const d = new Date(dateString);
     const now = new Date();
     const diff = now.getTime() - d.getTime();
     const minutes = Math.floor(diff / 60000);
@@ -86,54 +179,89 @@ const ReportsScreen: React.FC = () => {
     return `${minutes}분 전`;
   };
 
-  const renderReportItem = ({ item }: { item: Report }) => (
-    <TouchableOpacity
-      style={[styles.reportCard, isDarkMode && styles.cardDark]}
-      onPress={() => viewReport(item)}
-    >
-      <View style={styles.reportHeader}>
-        <View style={styles.reportTitleContainer}>
-          <Icon name="description" size={24} color="#667eea" />
-          <View style={styles.reportInfo}>
-            <Text style={[styles.reportKeyword, isDarkMode && styles.textDark]}>
-              {item.keyword}
+  const renderReportItem = ({ item }: { item: any }) => {
+    const isSelected = selectedReportIds.has(item.id);
+    
+    return (
+      <TouchableOpacity
+        style={[
+          styles.reportCard, 
+          isDarkMode && styles.cardDark,
+          isSelected && styles.selectedCard
+        ]}
+        onPress={() => {
+          if (isSelectionMode) {
+            toggleReportSelection(item.id);
+          } else {
+            viewReport(item);
+          }
+        }}
+        onLongPress={() => {
+          if (!isSelectionMode) {
+            setIsSelectionMode(true);
+            toggleReportSelection(item.id);
+          }
+        }}
+      >
+        <View style={styles.reportHeader}>
+          <View style={styles.reportTitleContainer}>
+            {isSelectionMode ? (
+              <TouchableOpacity
+                onPress={() => toggleReportSelection(item.id)}
+                style={styles.checkbox}
+              >
+                <Icon 
+                  name={isSelected ? "check-box" : "check-box-outline-blank"} 
+                  size={24} 
+                  color={isSelected ? "#667eea" : "#718096"} 
+                />
+              </TouchableOpacity>
+            ) : (
+              <Icon name="description" size={24} color="#667eea" />
+            )}
+            <View style={styles.reportInfo}>
+              <Text style={[styles.reportKeyword, isDarkMode && styles.textDark]}>
+                {item.query_text}
+              </Text>
+              <Text style={[styles.reportDate, isDarkMode && styles.subtextDark]}>
+                {getTimeDiff(item.created_at)}
+              </Text>
+            </View>
+          </View>
+          {!isSelectionMode && (
+            <TouchableOpacity
+              onPress={() => deleteReport(item.id)}
+              style={styles.deleteButton}
+            >
+              <Icon name="delete" size={24} color="#e53e3e" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.reportMeta}>
+          <View style={styles.metaItem}>
+            <Icon name="format-size" size={16} color="#718096" />
+            <Text style={[styles.metaText, isDarkMode && styles.subtextDark]}>
+              {item.full_report?.length || 0}자
             </Text>
-            <Text style={[styles.reportDate, isDarkMode && styles.subtextDark]}>
-              {getTimeDiff(item.createdAt)}
+          </View>
+          <View style={styles.metaItem}>
+            <Icon name="collections" size={16} color="#718096" />
+            <Text style={[styles.metaText, isDarkMode && styles.subtextDark]}>
+              {item.posts_collected || 0}개 게시물
             </Text>
           </View>
         </View>
-        <TouchableOpacity
-          onPress={() => deleteReport(item.id)}
-          style={styles.deleteButton}
+
+        <Text
+          style={[styles.reportPreview, isDarkMode && styles.subtextDark]}
+          numberOfLines={3}
         >
-          <Icon name="delete" size={24} color="#e53e3e" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.reportMeta}>
-        <View style={styles.metaItem}>
-          <Icon name="format-size" size={16} color="#718096" />
-          <Text style={[styles.metaText, isDarkMode && styles.subtextDark]}>
-            {item.metadata.charCount}자
-          </Text>
-        </View>
-        <View style={styles.metaItem}>
-          <Icon name="timer" size={16} color="#718096" />
-          <Text style={[styles.metaText, isDarkMode && styles.subtextDark]}>
-            {(item.metadata.processingTime / 1000).toFixed(1)}초
-          </Text>
-        </View>
-      </View>
-
-      <Text
-        style={[styles.reportPreview, isDarkMode && styles.subtextDark]}
-        numberOfLines={3}
-      >
-        {item.content}
-      </Text>
-    </TouchableOpacity>
-  );
+          {item.summary || item.full_report?.substring(0, 200) + '...' || '내용 없음'}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   const EmptyComponent = () => (
     <View style={styles.emptyContainer}>
@@ -153,11 +281,44 @@ const ReportsScreen: React.FC = () => {
         colors={isDarkMode ? ['#2d3748', '#1a202c'] : ['#667eea', '#764ba2']}
         style={styles.header}
       >
-        <Icon name="folder" size={50} color="#ffffff" />
-        <Text style={styles.headerTitle}>분석 보고서</Text>
-        <Text style={styles.headerSubtitle}>
-          총 {reports.length}개의 보고서가 저장되어 있습니다
-        </Text>
+        <View style={styles.headerContent}>
+          <Icon name="folder" size={50} color="#ffffff" />
+          <Text style={styles.headerTitle}>분석 보고서</Text>
+          <Text style={styles.headerSubtitle}>
+            {isSelectionMode 
+              ? `${selectedReportIds.size}개 선택됨` 
+              : `총 ${reports.length}개의 보고서가 저장되어 있습니다`}
+          </Text>
+        </View>
+        <View style={styles.headerActions}>
+          {isSelectionMode ? (
+            <>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={deleteSelectedReports}
+              >
+                <Icon name="delete" size={24} color="#ffffff" />
+                <Text style={styles.headerButtonText}>삭제</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={toggleSelectionMode}
+              >
+                <Icon name="close" size={24} color="#ffffff" />
+                <Text style={styles.headerButtonText}>취소</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={toggleSelectionMode}
+              disabled={reports.length === 0}
+            >
+              <Icon name="check-circle" size={24} color="#ffffff" />
+              <Text style={styles.headerButtonText}>선택</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </LinearGradient>
 
       <FlatList
@@ -193,7 +354,7 @@ const ReportsScreen: React.FC = () => {
               <Icon name="close" size={28} color={isDarkMode ? '#fff' : '#000'} />
             </TouchableOpacity>
             <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>
-              {selectedReport?.keyword}
+              {selectedReport?.query_text}
             </Text>
             <View style={styles.placeholder} />
           </View>
@@ -202,22 +363,24 @@ const ReportsScreen: React.FC = () => {
             <ScrollView style={styles.modalContent}>
               <View style={[styles.modalMetaContainer, isDarkMode && styles.cardDark]}>
                 <Text style={[styles.modalDate, isDarkMode && styles.textDark]}>
-                  {formatDate(selectedReport.createdAt)}
+                  {formatDate(selectedReport.created_at)}
                 </Text>
                 <View style={styles.modalMeta}>
                   <Text style={[styles.metaText, isDarkMode && styles.subtextDark]}>
-                    총 {selectedReport.metadata.charCount}자
+                    총 {selectedReport.full_report?.length || 0}자
                   </Text>
                   <Text style={[styles.metaText, isDarkMode && styles.subtextDark]}>
-                    소요시간 {(selectedReport.metadata.processingTime / 1000).toFixed(1)}초
+                    수집된 게시물 {selectedReport.posts_collected || 0}개
                   </Text>
                 </View>
               </View>
 
               <View style={[styles.modalReportContent, isDarkMode && styles.cardDark]}>
-                <Text style={[styles.reportFullText, isDarkMode && styles.textDark]}>
-                  {selectedReport.content}
-                </Text>
+                <ReportRenderer 
+                  content={selectedReport.full_report || '내용을 불러올 수 없습니다.'}
+                  isDarkMode={isDarkMode}
+                  reportId={selectedReport.id}
+                />
               </View>
 
               <View style={styles.modalActions}>
@@ -410,6 +573,37 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 38,
+  },
+  headerContent: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 15,
+  },
+  headerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginHorizontal: 5,
+  },
+  headerButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  selectedCard: {
+    borderWidth: 2,
+    borderColor: '#667eea',
+  },
+  checkbox: {
+    marginRight: 5,
   },
   modalContent: {
     flex: 1,

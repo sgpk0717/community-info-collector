@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,15 @@ import {
   Alert,
   ActivityIndicator,
   useColorScheme,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../utils/constants';
 
 const LoginScreen: React.FC = () => {
   const isDarkMode = useColorScheme() === 'dark';
@@ -23,6 +26,26 @@ const LoginScreen: React.FC = () => {
   const { login } = useAuth();
   const [nickname, setNickname] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [saveNickname, setSaveNickname] = useState(true); // 기본적으로 닉네임 저장
+  const slideAnimation = useRef(new Animated.Value(1)).current;
+  const backgroundAnimation = useRef(new Animated.Value(1)).current;
+  const iconRotation = useRef(new Animated.Value(0)).current;
+
+  // 저장된 닉네임 불러오기
+  useEffect(() => {
+    loadSavedNickname();
+  }, []);
+
+  const loadSavedNickname = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('savedNickname');
+      if (saved) {
+        setNickname(saved);
+      }
+    } catch (error) {
+      console.error('Error loading saved nickname:', error);
+    }
+  };
 
   const handleLogin = async () => {
     if (!nickname.trim()) {
@@ -34,7 +57,14 @@ const LoginScreen: React.FC = () => {
     try {
       const success = await login(nickname);
       if (success) {
-        // 로그인 성공 - AuthContext에서 상태 관리
+        // 로그인 성공 시 사용자가 선택한 경우에만 닉네임 저장
+        if (saveNickname) {
+          await AsyncStorage.setItem('savedNickname', nickname);
+        } else {
+          // 저장하지 않기로 선택한 경우 기존 저장된 닉네임 삭제
+          await AsyncStorage.removeItem('savedNickname');
+        }
+        // AuthContext에서 상태 관리
         // 자동으로 메인 화면으로 이동됨
       }
     } catch (error) {
@@ -46,6 +76,32 @@ const LoginScreen: React.FC = () => {
 
   const handleRegister = () => {
     navigation.navigate('Register');
+  };
+
+  const toggleSaveNickname = () => {
+    const newValue = !saveNickname;
+    
+    // 슬라이드 애니메이션
+    Animated.parallel([
+      Animated.spring(slideAnimation, {
+        toValue: newValue ? 1 : 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: false,
+      }),
+      Animated.timing(backgroundAnimation, {
+        toValue: newValue ? 1 : 0,
+        duration: 300,
+        useNativeDriver: false,
+      }),
+      Animated.timing(iconRotation, {
+        toValue: newValue ? 0 : 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
+    setSaveNickname(newValue);
   };
 
   return (
@@ -77,6 +133,67 @@ const LoginScreen: React.FC = () => {
               autoCorrect={false}
               editable={!isLoading}
             />
+          </View>
+
+          <View style={styles.saveNicknameWrapper}>
+            <TouchableOpacity 
+              style={styles.saveNicknameContainer}
+              onPress={toggleSaveNickname}
+              activeOpacity={0.9}
+            >
+              <Animated.View style={[
+                styles.switchTrack,
+                {
+                  backgroundColor: backgroundAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.2)'],
+                  }),
+                }
+              ]}>
+                <Animated.View style={[
+                  styles.switchThumb,
+                  {
+                    transform: [{
+                      translateX: slideAnimation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [2, 28],
+                      }),
+                    }],
+                    backgroundColor: backgroundAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['#ef4444', '#ffffff'],
+                    }),
+                  }
+                ]}>
+                  <Animated.View style={{
+                    transform: [{
+                      rotate: iconRotation.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['0deg', '180deg'],
+                      }),
+                    }],
+                  }}>
+                    <Icon 
+                      name={saveNickname ? "lock" : "lock-open"} 
+                      size={14} 
+                      color={saveNickname ? "#667eea" : "#ffffff"} 
+                    />
+                  </Animated.View>
+                </Animated.View>
+                
+                <View style={styles.trackLabels}>
+                  <Text style={[styles.trackLabel, !saveNickname && styles.trackLabelActive]}>OFF</Text>
+                  <Text style={[styles.trackLabel, saveNickname && styles.trackLabelActive]}>ON</Text>
+                </View>
+              </Animated.View>
+            </TouchableOpacity>
+            
+            <View style={styles.saveInfoContainer}>
+              <Text style={styles.saveInfoTitle}>닉네임 저장</Text>
+              <Text style={styles.saveInfoDesc}>
+                {saveNickname ? '다음 로그인 시 자동 입력됩니다' : '매번 닉네임을 입력해야 합니다'}
+              </Text>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -145,6 +262,64 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     marginBottom: 20,
     width: '100%',
+  },
+  saveNicknameWrapper: {
+    width: '100%',
+    alignItems: 'flex-end',
+    marginBottom: 30,
+  },
+  saveNicknameContainer: {
+    marginBottom: 8,
+  },
+  switchTrack: {
+    width: 60,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  switchThumb: {
+    position: 'absolute',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  trackLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+  trackLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.3)',
+    letterSpacing: 0.5,
+  },
+  trackLabelActive: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  saveInfoContainer: {
+    alignItems: 'flex-end',
+  },
+  saveInfoTitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  saveInfoDesc: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 12,
+    fontWeight: '400',
   },
   inputIcon: {
     marginRight: 10,

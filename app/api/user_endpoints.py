@@ -140,3 +140,35 @@ async def get_user_service_status():
         "available": supabase_service.is_available(),
         "provider": "supabase"
     }
+
+@router.get("/check-nickname/{nickname}", response_model=Dict[str, Any])
+async def check_nickname_duplicate(nickname: str):
+    """닉네임 중복 확인"""
+    try:
+        result = await supabase_service.get_user_by_nickname(nickname)
+        
+        # 사용자가 있으면 중복
+        if result["success"]:
+            return {
+                "success": True,
+                "available": False,
+                "message": "이미 사용 중인 닉네임입니다."
+            }
+        else:
+            # 사용자가 없으면 사용 가능
+            if result.get("error") == "USER_NOT_FOUND":
+                return {
+                    "success": True,
+                    "available": True,
+                    "message": "사용 가능한 닉네임입니다."
+                }
+            elif result.get("error") == "SUPABASE_NOT_AVAILABLE":
+                raise HTTPException(status_code=503, detail="사용자 서비스를 사용할 수 없습니다.")
+            else:
+                raise HTTPException(status_code=500, detail="닉네임 확인 중 오류가 발생했습니다.")
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"닉네임 중복 확인 API 오류: {e}")
+        raise HTTPException(status_code=500, detail="서버 오류가 발생했습니다.")

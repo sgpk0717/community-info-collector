@@ -1,16 +1,19 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.endpoints import router
-from app.api.advanced_endpoints import router as advanced_router
-from app.api.schedule_endpoints import router as schedule_router
+# from app.api.advanced_endpoints import router as advanced_router  # 비활성화
+# from app.api.schedule_endpoints import router as schedule_router  # SQLAlchemy 기반 - 비활성화
+from app.api.supabase_schedule_endpoints import router as supabase_schedule_router
 from app.api.user_endpoints import router as user_router
-from app.db.base import engine, Base
+from app.api.websocket_endpoints import router as websocket_router
 import logging
+from app.core.logging_config import setup_logging
 
-logging.basicConfig(level=logging.INFO)
+# 로깅 설정 - 보기 좋은 포맷 적용
+setup_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-Base.metadata.create_all(bind=engine)
+# SQLAlchemy 테이블 생성 제거 - Supabase 사용
 
 app = FastAPI(
     title="Community Info Collector",
@@ -27,9 +30,20 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api/v1", tags=["community"])
-app.include_router(advanced_router, prefix="/api/v1", tags=["advanced"])
-app.include_router(schedule_router, prefix="/api/v1", tags=["schedule"])
+# app.include_router(advanced_router, prefix="/api/v1", tags=["advanced"])  # 비활성화
+# app.include_router(schedule_router, prefix="/api/v1", tags=["schedule"])  # SQLAlchemy 기반 - 비활성화
+app.include_router(supabase_schedule_router, tags=["supabase-schedule"])
 app.include_router(user_router, prefix="/api/v1/users", tags=["users"])
+app.include_router(websocket_router, prefix="/api/v1", tags=["websocket"])
+
+# 새로운 스케줄 API 추가 (prefix 없이 직접 v1에 마운트)
+from fastapi import APIRouter
+new_schedule_router = APIRouter()
+
+# 스케줄 관련 새 엔드포인트 추가 - 현재 비활성화
+# SQLAlchemy 기반 엔드포인트는 Supabase 버전으로 대체 필요
+
+# app.include_router(new_schedule_router, prefix="/api/v1", tags=["new-schedules"]) # 비활성화
 
 @app.get("/")
 async def root():
@@ -47,12 +61,19 @@ async def root():
 # 스케줄러 서비스 시작
 @app.on_event("startup")
 async def startup_event():
-    from app.services.scheduler_service import scheduler_service
-    scheduler_service.start()
-    logger.info("Scheduler service started")
+    from app.api.websocket_endpoints import progress_manager
+    from app.services.progress_service import progress_service
+    from app.services.supabase_scheduler_service import supabase_scheduler_service
+    
+    progress_service.set_progress_manager(progress_manager)
+    logger.info("Progress service initialized")
+    
+    # Supabase 스케줄러 시작 (비동기 함수이므로 await 사용)
+    await supabase_scheduler_service.start()
+    logger.info("✅ Supabase scheduler service started successfully")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    from app.services.scheduler_service import scheduler_service
-    scheduler_service.stop()
-    logger.info("Scheduler service stopped")
+    from app.services.supabase_scheduler_service import supabase_scheduler_service
+    await supabase_scheduler_service.stop()
+    logger.info("🛑 Supabase scheduler service stopped")

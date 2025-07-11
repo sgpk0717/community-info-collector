@@ -2,7 +2,8 @@ from pydantic_settings import BaseSettings
 from typing import Optional
 
 class Settings(BaseSettings):
-    DATABASE_URL: Optional[str] = None
+    # DATABASE_URL: Optional[str] = None  # SQLite 비활성화
+    DATABASE_URL: Optional[str] = None  # 수파베이스 사용
     
     REDDIT_CLIENT_ID: Optional[str] = None
     REDDIT_CLIENT_SECRET: Optional[str] = None

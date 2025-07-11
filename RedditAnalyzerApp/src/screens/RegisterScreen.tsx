@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,12 +15,43 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import ApiService from '../services/api.service';
+import { API_BASE_URL } from '../utils/constants';
 
 const RegisterScreen: React.FC = () => {
   const isDarkMode = useColorScheme() === 'dark';
   const navigation = useNavigation<any>();
   const [nickname, setNickname] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingNickname, setIsCheckingNickname] = useState(false);
+  const [nicknameAvailable, setNicknameAvailable] = useState<boolean | null>(null);
+
+  // 닉네임 변경 시 중복 체크
+  useEffect(() => {
+    if (nickname.trim()) {
+      checkNicknameAvailability();
+    } else {
+      setNicknameAvailable(null);
+    }
+  }, [nickname]);
+
+  const checkNicknameAvailability = async () => {
+    if (!nickname.trim()) return;
+
+    setIsCheckingNickname(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/check-nickname/${encodeURIComponent(nickname)}`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        setNicknameAvailable(data.available);
+      }
+    } catch (error) {
+      console.error('Error checking nickname:', error);
+    } finally {
+      setIsCheckingNickname(false);
+    }
+  };
+
 
   const handleRegister = async () => {
     if (!nickname.trim()) {
@@ -89,7 +120,7 @@ const RegisterScreen: React.FC = () => {
           <Text style={styles.title}>사용자 등록</Text>
           <Text style={styles.subtitle}>사용할 닉네임을 입력해주세요</Text>
 
-          <View style={styles.inputContainer}>
+          <View style={[styles.inputContainer, nicknameAvailable === false && styles.inputError]}>
             <Icon name="person" size={24} color="#ffffff" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
@@ -102,16 +133,29 @@ const RegisterScreen: React.FC = () => {
               maxLength={20}
               editable={!isLoading}
             />
+            {isCheckingNickname && (
+              <ActivityIndicator size="small" color="#ffffff" />
+            )}
+            {!isCheckingNickname && nicknameAvailable !== null && (
+              <Icon 
+                name={nicknameAvailable ? "check-circle" : "cancel"} 
+                size={24} 
+                color={nicknameAvailable ? "#4ade80" : "#f87171"} 
+              />
+            )}
           </View>
+          {nicknameAvailable === false && (
+            <Text style={styles.errorText}>이미 사용 중인 닉네임입니다</Text>
+          )}
 
           <Text style={styles.infoText}>
             * 등록 후 관리자 승인이 필요합니다
           </Text>
 
           <TouchableOpacity
-            style={[styles.registerButton, isLoading && styles.disabledButton]}
+            style={[styles.registerButton, (isLoading || nicknameAvailable === false) && styles.disabledButton]}
             onPress={handleRegister}
-            disabled={isLoading}
+            disabled={isLoading || nicknameAvailable === false}
           >
             {isLoading ? (
               <ActivityIndicator color="#667eea" />
@@ -143,6 +187,11 @@ const styles = StyleSheet.create({
     top: 50,
     left: 20,
     padding: 10,
+    borderRadius: 20,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   iconContainer: {
     width: 100,
@@ -171,8 +220,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 12,
     paddingHorizontal: 15,
-    marginBottom: 15,
+    marginBottom: 5,
     width: '100%',
+  },
+  inputError: {
+    borderWidth: 1,
+    borderColor: '#f87171',
+  },
+  errorText: {
+    color: '#f87171',
+    fontSize: 14,
+    marginBottom: 10,
+    alignSelf: 'flex-start',
   },
   inputIcon: {
     marginRight: 10,

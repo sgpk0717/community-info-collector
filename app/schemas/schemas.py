@@ -17,6 +17,17 @@ class ScheduleStatusEnum(str, Enum):
 class SearchRequest(BaseModel):
     query: str
     sources: Optional[List[str]] = ["reddit", "twitter", "threads"]
+    length: Optional[ReportLength] = ReportLength.moderate
+    user_id: Optional[int] = None
+    schedule_id: Optional[int] = None
+    session_id: Optional[str] = None  # 세션 ID
+    push_token: Optional[str] = None  # 푸시 알림 토큰
+    # 스케줄링 관련 필드 추가
+    user_nickname: Optional[str] = None  # 사용자 닉네임
+    schedule_yn: Optional[str] = "N"  # 스케줄링 여부 (Y/N)
+    schedule_period: Optional[int] = None  # 주기 (분 단위)
+    schedule_count: Optional[int] = None  # 반복 횟수
+    schedule_start_time: Optional[datetime] = None  # 시작 시간
 
 class PostBase(BaseModel):
     source: str
@@ -25,6 +36,11 @@ class PostBase(BaseModel):
     title: Optional[str]
     content: Optional[str]
     url: Optional[str]
+    # 메타데이터 추가
+    score: Optional[int] = None  # 추천수/좋아요
+    comments: Optional[int] = None  # 댓글 수
+    created_utc: Optional[float] = None  # 생성 시간 (UTC timestamp)
+    subreddit: Optional[str] = None  # 서브레딧 이름
 
 class PostResponse(PostBase):
     id: int
@@ -48,6 +64,7 @@ class SearchResponse(BaseModel):
     query_text: str
     posts_collected: int
     report: Optional[ReportResponse]
+    session_id: Optional[str] = None
 
 # 사용자 관련 모델
 class UserCreate(BaseModel):

@@ -37,13 +37,16 @@ class SupabaseService:
             return {"success": False, "error": "SUPABASE_NOT_AVAILABLE"}
         
         try:
-            # 닉네임 중복 체크
-            existing_user = self.supabase.table('users').select('id').eq('nickname', nickname).execute()
+            # 닉네임을 소문자로 변환
+            nickname_lower = nickname.lower()
+            
+            # 닉네임 중복 체크 (대소문자 구분 없이)
+            existing_user = self.supabase.table('users').select('id').ilike('nickname', nickname_lower).execute()
             
             if existing_user.data:
                 return {"success": False, "error": "NICKNAME_EXISTS"}
             
-            # 새 사용자 생성
+            # 새 사용자 생성 (원본 닉네임 저장)
             result = self.supabase.table('users').insert({
                 'nickname': nickname,
                 'approval_status': 'N'
@@ -72,8 +75,8 @@ class SupabaseService:
             return {"success": False, "error": "SUPABASE_NOT_AVAILABLE"}
         
         try:
-            # 사용자 조회
-            result = self.supabase.table('users').select('*').eq('nickname', nickname).execute()
+            # 사용자 조회 (대소문자 구분 없이)
+            result = self.supabase.table('users').select('*').ilike('nickname', nickname).execute()
             
             if not result.data:
                 return {"success": False, "error": "USER_NOT_FOUND"}
@@ -151,6 +154,33 @@ class SupabaseService:
             
         except Exception as e:
             logger.error(f"사용자 목록 조회 오류: {e}")
+            return {"success": False, "error": "FETCH_FAILED"}
+    
+    async def get_user_by_nickname(self, nickname: str) -> Dict[str, Any]:
+        """닉네임으로 사용자 조회"""
+        if not self.is_available():
+            return {"success": False, "error": "SUPABASE_NOT_AVAILABLE"}
+        
+        try:
+            # 사용자 조회 (대소문자 구분 없이)
+            result = self.supabase.table('users').select('*').ilike('nickname', nickname).execute()
+            
+            if not result.data:
+                return {"success": False, "error": "USER_NOT_FOUND"}
+            
+            user = result.data[0]
+            return {
+                "success": True,
+                "data": {
+                    "id": user['id'],
+                    "nickname": user['nickname'],
+                    "approval_status": user['approval_status'],
+                    "created_at": user['created_at']
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"사용자 조회 오류: {e}")
             return {"success": False, "error": "FETCH_FAILED"}
 
 # 싱글톤 인스턴스

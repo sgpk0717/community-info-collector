@@ -3,11 +3,8 @@
 헤드리스 브라우저와 고급 크롤링 기능 제공
 """
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
-from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from app.db.base import get_db
 from app.schemas.schemas import SearchRequest, SearchResponse, PostResponse
-from app.models.models import SearchQuery, CollectedPost, Report
 from app.services.browser_service import BrowserService
 from app.services.linkedin_service import LinkedInService
 from app.services.discord_service import DiscordService

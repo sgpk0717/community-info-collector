@@ -1,6 +1,7 @@
 export interface User {
   deviceId: string;
   name?: string;
+  nickname?: string;
   createdAt: Date;
   lastActive: Date;
 }

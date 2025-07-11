@@ -12,12 +12,16 @@ class ApiService {
     },
   });
 
-  async analyze(userInput: string, reportLength: ReportLength): Promise<ApiResponse> {
+  async analyze(userInput: string, reportLength: ReportLength, sessionId?: string, pushToken?: string | null): Promise<ApiResponse> {
     try {
+      const user = AuthService.getCurrentUser();
       const response = await this.api.post('/api/v1/search', {
         query: userInput,
         sources: ['reddit'],
-        report_length: reportLength,
+        length: reportLength,
+        session_id: sessionId,
+        user_nickname: user?.nickname, // 사용자 닉네임 추가
+        push_token: pushToken, // 푸시 토큰 추가
       });
 
       const data = response.data;
@@ -28,6 +32,7 @@ class ApiService {
           queryId: data.query_id,
           content: data.report.full_report,
           htmlReport: data.report.full_report,
+          sessionId: data.session_id,
           metadata: {
             postsCollected: data.posts_collected,
             charCount: data.report.full_report.length,
@@ -39,7 +44,7 @@ class ApiService {
       if (axios.isAxiosError(error)) {
         return {
           success: false,
-          error: error.response?.data?.error || '분석에 실패했습니다',
+          error: error.response?.data?.detail || error.response?.data?.error || '분석에 실패했습니다',
           details: error.response?.data?.details,
         };
       }
@@ -363,6 +368,293 @@ class ApiService {
   private async getUserIdentifier(): Promise<string> {
     const user = AuthService.getCurrentUser();
     return user?.deviceId || '';
+  }
+
+  // 보고서 관련 API
+  async getUserReports(userNickname?: string, limit: number = 20): Promise<ApiResponse> {
+    try {
+      const user = AuthService.getCurrentUser();
+      const nickname = userNickname || user?.nickname;
+      
+      if (!nickname) {
+        return {
+          success: false,
+          error: '사용자 닉네임이 필요합니다',
+        };
+      }
+
+      const response = await this.api.get(`/api/v1/reports/${nickname}?limit=${limit}`);
+
+      return {
+        success: true,
+        data: response.data.reports,
+      };
+    } catch (error) {
+      console.error('Get user reports error:', error);
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || '보고서 조회에 실패했습니다',
+        };
+      }
+      
+      return {
+        success: false,
+        error: '보고서 조회에 실패했습니다',
+      };
+    }
+  }
+
+  async getReportDetail(reportId: string): Promise<ApiResponse> {
+    try {
+      const response = await this.api.get(`/api/v1/reports/detail/${reportId}`);
+
+      return {
+        success: true,
+        data: response.data.report,
+      };
+    } catch (error) {
+      console.error('Get report detail error:', error);
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || '보고서 상세 조회에 실패했습니다',
+        };
+      }
+      
+      return {
+        success: false,
+        error: '보고서 상세 조회에 실패했습니다',
+      };
+    }
+  }
+
+  async deleteReport(reportId: string, userNickname?: string): Promise<ApiResponse> {
+    try {
+      const user = AuthService.getCurrentUser();
+      const nickname = userNickname || user?.nickname;
+      
+      if (!nickname) {
+        return {
+          success: false,
+          error: '사용자 닉네임이 필요합니다',
+        };
+      }
+
+      const response = await this.api.delete(`/api/v1/reports/${reportId}?user_nickname=${nickname}`);
+
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      console.error('Delete report error:', error);
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || '보고서 삭제에 실패했습니다',
+        };
+      }
+      
+      return {
+        success: false,
+        error: '보고서 삭제에 실패했습니다',
+      };
+    }
+  }
+
+  async getReportLinks(reportId: string): Promise<ApiResponse<any[]>> {
+    try {
+      const response = await this.api.get(`/api/v1/report/${reportId}/links`);
+
+      return {
+        success: true,
+        data: response.data.links || [],
+      };
+    } catch (error) {
+      console.error('Get report links error:', error);
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || '링크 조회에 실패했습니다',
+          data: [],
+        };
+      }
+      
+      return {
+        success: false,
+        error: '링크 조회에 실패했습니다',
+        data: [],
+      };
+    }
+  }
+
+  async getReportStats(userNickname?: string): Promise<ApiResponse> {
+    try {
+      const user = AuthService.getCurrentUser();
+      const nickname = userNickname || user?.nickname;
+      
+      if (!nickname) {
+        return {
+          success: false,
+          error: '사용자 닉네임이 필요합니다',
+        };
+      }
+
+      const response = await this.api.get(`/api/v1/reports/${nickname}/stats`);
+
+      return {
+        success: true,
+        data: response.data.stats,
+      };
+    } catch (error) {
+      console.error('Get report stats error:', error);
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || '통계 조회에 실패했습니다',
+        };
+      }
+      
+      return {
+        success: false,
+        error: '통계 조회에 실패했습니다',
+      };
+    }
+  }
+
+  // 새로운 스케줄링 API (사용자 닉네임 기반)
+  async createNewSchedule(scheduleData: {
+    keyword: string;
+    interval_minutes: number;
+    total_reports: number;
+    start_time: string;
+    notification_enabled: boolean;
+    user_nickname: string;
+  }): Promise<ApiResponse> {
+    try {
+      const response = await this.api.post('/api/v1/schedule/create', scheduleData);
+
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      console.error('Create new schedule error:', error);
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || '스케줄 등록에 실패했습니다',
+        };
+      }
+      
+      return {
+        success: false,
+        error: '스케줄 등록에 실패했습니다',
+      };
+    }
+  }
+
+  async getUserSchedules(userNickname: string): Promise<ApiResponse> {
+    try {
+      const response = await this.api.get(`/api/v1/schedule/user/${userNickname}`);
+
+      return {
+        success: true,
+        data: response.data.schedules || [],
+      };
+    } catch (error) {
+      console.error('Get user schedules error:', error);
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || '스케줄 목록 조회에 실패했습니다',
+          data: [],
+        };
+      }
+      
+      return {
+        success: false,
+        error: '스케줄 목록 조회에 실패했습니다',
+        data: [],
+      };
+    }
+  }
+
+  async deleteSchedule(scheduleId: number, forceDelete: boolean = false): Promise<ApiResponse> {
+    try {
+      const response = await this.api.delete(
+        `/api/v1/schedule/${scheduleId}${forceDelete ? '?force_delete=true' : ''}`
+      );
+
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      console.error('Delete schedule error:', error);
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || '스케줄 삭제에 실패했습니다',
+        };
+      }
+      
+      return {
+        success: false,
+        error: '스케줄 삭제에 실패했습니다',
+      };
+    }
+  }
+
+  async deleteAllCancelledSchedules(userNickname: string): Promise<ApiResponse> {
+    try {
+      const response = await this.api.delete(`/api/v1/schedule/cancelled/${userNickname}`);
+
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      console.error('Delete all cancelled schedules error:', error);
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || '취소된 스케줄 일괄 삭제에 실패했습니다',
+        };
+      }
+      
+      return {
+        success: false,
+        error: '취소된 스케줄 일괄 삭제에 실패했습니다',
+      };
+    }
+  }
+
+  async updateScheduleStatus(scheduleId: number, action: 'pause' | 'resume'): Promise<ApiResponse> {
+    try {
+      const response = await this.api.patch(`/api/v1/schedule/${scheduleId}/status`, {
+        action: action,
+      });
+
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      console.error('Update schedule status error:', error);
+      if (axios.isAxiosError(error)) {
+        return {
+          success: false,
+          error: error.response?.data?.detail || '스케줄 상태 변경에 실패했습니다',
+        };
+      }
+      
+      return {
+        success: false,
+        error: '스케줄 상태 변경에 실패했습니다',
+      };
+    }
   }
 }
 
