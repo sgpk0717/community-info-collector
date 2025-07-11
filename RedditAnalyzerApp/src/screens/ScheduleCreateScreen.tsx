@@ -62,7 +62,6 @@ const ScheduleCreateScreen: React.FC = () => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [calculatedEndTime, setCalculatedEndTime] = useState<Date | null>(null);
-  const [showCustomTimePicker, setShowCustomTimePicker] = useState(false);
 
   // 마지막 실행 시점 계산
   useEffect(() => {
@@ -213,145 +212,24 @@ const ScheduleCreateScreen: React.FC = () => {
 
   // 시간 변경 핸들러
   const handleTimeChange = (event: any, selectedTime?: Date) => {
-    setShowTimePicker(Platform.OS === 'ios');
+    if (Platform.OS === 'android') {
+      setShowTimePicker(false);
+    }
     if (selectedTime) {
       const newDateTime = new Date(scheduleForm.startTime);
       newDateTime.setHours(selectedTime.getHours());
-      newDateTime.setMinutes(0); // 정시로 설정
+      // 10분 단위로 반올림
+      const minutes = Math.round(selectedTime.getMinutes() / 10) * 10;
+      newDateTime.setMinutes(minutes >= 60 ? 0 : minutes);
+      if (minutes >= 60) {
+        newDateTime.setHours(newDateTime.getHours() + 1);
+      }
       newDateTime.setSeconds(0);
       newDateTime.setMilliseconds(0);
       setScheduleForm({ ...scheduleForm, startTime: newDateTime });
     }
   };
 
-  // 커스텀 시간 선택기 컴포넌트
-  const CustomTimePicker = () => {
-    const hours = Array.from({ length: 24 }, (_, i) => i);
-    // 분 선택 제거 (정시만 선택 가능)
-    const selectedHour = scheduleForm.startTime.getHours();
-    const selectedMinute = scheduleForm.startTime.getMinutes();
-    const [tempHour, setTempHour] = React.useState(selectedHour);
-    const [tempMinute, setTempMinute] = React.useState(selectedMinute);
-    
-    return (
-      <Modal
-        visible={showCustomTimePicker}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowCustomTimePicker(false)}
-      >
-        <TouchableOpacity 
-          style={[styles.customTimePickerModal, isDarkMode && styles.customTimePickerModalDark]}
-          activeOpacity={1}
-          onPress={() => setShowCustomTimePicker(false)}
-        >
-          <TouchableOpacity 
-            activeOpacity={1}
-            style={[styles.customTimePickerContainer, isDarkMode && styles.customTimePickerContainerDark]}
-            onPress={(e) => e.stopPropagation()}
-          >
-          <View style={[styles.customTimePickerHeader, isDarkMode && { borderBottomColor: '#2a3040' }]}>
-            <Text style={[styles.customTimePickerTitle, isDarkMode && styles.textDark]}>
-              시간 선택
-            </Text>
-            <TouchableOpacity onPress={() => setShowCustomTimePicker(false)}>
-              <Icon name="close" size={24} color={isDarkMode ? '#e2e8f0' : '#2d3748'} />
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView style={styles.customTimePickerScroll} showsVerticalScrollIndicator={false}>
-            <Text style={[styles.customTimePickerSectionTitle, isDarkMode && styles.textDark]}>시간</Text>
-            <View style={styles.customTimePickerGrid}>
-              {hours.map((hour) => {
-                const isSelected = hour === tempHour;
-                const isPM = hour >= 12;
-                const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-                
-                return (
-                  <TouchableOpacity
-                    key={hour}
-                    style={[
-                      styles.customTimePickerItem,
-                      isDarkMode && styles.customTimePickerItemDark,
-                      isSelected && styles.customTimePickerItemSelected,
-                      isSelected && isDarkMode && { backgroundColor: '#2a3040' },
-                    ]}
-                    onPress={() => setTempHour(hour)}
-                  >
-                    <Text
-                      style={[
-                        styles.customTimePickerItemText,
-                        isDarkMode && styles.textDark,
-                        isSelected && styles.customTimePickerItemTextSelected,
-                      ]}
-                    >
-                      {displayHour}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.customTimePickerItemPeriod,
-                        isDarkMode && styles.subtextDark,
-                        isSelected && styles.customTimePickerItemTextSelected,
-                      ]}
-                    >
-                      {isPM ? '오후' : '오전'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            
-            {/* 10분 단위 분 선택 */}
-            <Text style={[styles.customTimePickerSectionTitle, isDarkMode && styles.textDark, { marginTop: 20 }]}>분</Text>
-            <View style={styles.customTimePickerGrid}>
-              {[0, 10, 20, 30, 40, 50].map((minute) => {
-                const isSelected = minute === tempMinute;
-                
-                return (
-                  <TouchableOpacity
-                    key={minute}
-                    style={[
-                      styles.customTimePickerItem,
-                      isDarkMode && styles.customTimePickerItemDark,
-                      isSelected && styles.customTimePickerItemSelected,
-                      isSelected && isDarkMode && { backgroundColor: '#2a3040' },
-                    ]}
-                    onPress={() => setTempMinute(minute)}
-                  >
-                    <Text
-                      style={[
-                        styles.customTimePickerItemText,
-                        isDarkMode && styles.textDark,
-                        isSelected && styles.customTimePickerItemTextSelected,
-                      ]}
-                    >
-                      {minute.toString().padStart(2, '0')}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </ScrollView>
-          
-            <TouchableOpacity
-              style={[styles.customTimePickerButton, isDarkMode && styles.customTimePickerButtonDark]}
-              onPress={() => {
-                const newDateTime = new Date(scheduleForm.startTime);
-                newDateTime.setHours(tempHour);
-                newDateTime.setMinutes(tempMinute); // 10분 단위로 설정
-                newDateTime.setSeconds(0);
-                newDateTime.setMilliseconds(0);
-                setScheduleForm({ ...scheduleForm, startTime: newDateTime });
-                setShowCustomTimePicker(false);
-              }}
-            >
-              <Text style={styles.customTimePickerButtonText}>완료</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-    );
-  };
 
   const IntervalButton = ({ minutes, label }: { minutes: number; label: string }) => (
     <TouchableOpacity
@@ -466,7 +344,7 @@ const ScheduleCreateScreen: React.FC = () => {
           {/* 시간 선택 */}
           <TouchableOpacity
             style={[styles.timeButton, isDarkMode && styles.timeButtonDark, { marginTop: 10 }]}
-            onPress={() => setShowCustomTimePicker(true)}
+            onPress={() => setShowTimePicker(true)}
           >
             <Icon name="schedule" size={20} color="#667eea" />
             <Text style={[styles.timeButtonText, isDarkMode && styles.textDark]}>
@@ -487,6 +365,62 @@ const ScheduleCreateScreen: React.FC = () => {
               display="default"
               onChange={handleDateChange}
             />
+          )}
+          
+          {showTimePicker && Platform.OS === 'android' && (
+            <DateTimePicker
+              value={scheduleForm.startTime}
+              mode="time"
+              display="default"
+              onChange={handleTimeChange}
+              minuteInterval={10}
+            />
+          )}
+          
+          {showTimePicker && Platform.OS === 'ios' && (
+            <Modal
+              transparent={true}
+              animationType="slide"
+              visible={showTimePicker}
+              onRequestClose={() => setShowTimePicker(false)}
+            >
+              <TouchableOpacity 
+                style={styles.modalOverlay}
+                activeOpacity={1}
+                onPress={() => setShowTimePicker(false)}
+              >
+                <View style={[styles.modalContainer, isDarkMode && styles.modalContainerDark]}>
+                  <View style={[styles.modalHeader, isDarkMode && { borderBottomColor: '#2a3040' }]}>
+                    <Text style={[styles.modalTitle, isDarkMode && styles.textDark]}>
+                      시간 선택
+                    </Text>
+                    <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                      <Icon name="close" size={24} color={isDarkMode ? '#e2e8f0' : '#2d3748'} />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <View style={{ backgroundColor: isDarkMode ? '#1a2030' : '#ffffff', paddingVertical: 20 }}>
+                    <DateTimePicker
+                      value={scheduleForm.startTime}
+                      mode="time"
+                      display="spinner"
+                      onChange={handleTimeChange}
+                      minuteInterval={10}
+                      style={{ height: 216, backgroundColor: 'transparent' }}
+                      textColor={isDarkMode ? '#ffffff' : '#000000'}
+                      locale="ko-KR"
+                    />
+                  </View>
+                  
+                  <TouchableOpacity
+                    style={[styles.modalButton, isDarkMode && styles.modalButtonDark]}
+                    onPress={() => setShowTimePicker(false)}
+                  >
+                    <Text style={styles.modalButtonText}>완료</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            </Modal>
           )}
         </View>
 
@@ -620,8 +554,6 @@ const ScheduleCreateScreen: React.FC = () => {
       </View>
     </ScrollView>
     
-    {/* 커스텀 시간 선택기 */}
-    <CustomTimePicker />
     </>
   );
 };
@@ -922,106 +854,48 @@ const styles = StyleSheet.create({
     color: '#4a5568',
     fontWeight: '700',
   },
-  customTimePickerModal: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  modalOverlay: {
+    flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
+    justifyContent: 'flex-end',
   },
-  customTimePickerModalDark: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-  },
-  customTimePickerContainer: {
+  modalContainer: {
     backgroundColor: '#ffffff',
-    borderRadius: 24,
-    width: '90%',
-    maxWidth: 400,
-    maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 10,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
   },
-  customTimePickerContainerDark: {
-    backgroundColor: '#1a1f2e',
+  modalContainerDark: {
+    backgroundColor: '#141824',
   },
-  customTimePickerHeader: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  customTimePickerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#2d3748',
-  },
-  customTimePickerScroll: {
-    maxHeight: 400,
-  },
-  customTimePickerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 10,
-  },
-  customTimePickerItem: {
-    width: '25%',
-    padding: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 80,
-  },
-  customTimePickerItemDark: {
-    backgroundColor: 'transparent',
-  },
-  customTimePickerItemSelected: {
-    backgroundColor: '#f0f4ff',
-    borderRadius: 16,
-    transform: [{ scale: 1.05 }],
-  },
-  customTimePickerItemText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#4a5568',
-    marginBottom: 4,
-  },
-  customTimePickerItemTextSelected: {
-    color: '#667eea',
-  },
-  customTimePickerItemPeriod: {
-    fontSize: 12,
-    color: '#718096',
-    fontWeight: '600',
-  },
-  customTimePickerButton: {
-    backgroundColor: '#667eea',
-    margin: 20,
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  customTimePickerButtonDark: {
-    backgroundColor: '#5a67d8',
-  },
-  customTimePickerButtonText: {
-    color: '#ffffff',
+  modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
-  },
-  customTimePickerSectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#2d3748',
-    marginBottom: 10,
-    paddingHorizontal: 10,
+  },
+  modalButton: {
+    backgroundColor: '#667eea',
+    marginHorizontal: 20,
+    marginTop: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonDark: {
+    backgroundColor: '#764ba2',
+  },
+  modalButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
