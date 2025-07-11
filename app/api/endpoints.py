@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from typing import List, Optional, Dict
 from app.schemas.schemas import SearchRequest, SearchResponse, PostResponse, ReportResponse
 from app.services.reddit_service import RedditService
-from app.services.twitter_service import TwitterService
+# from app.services.twitter_service import TwitterService  # Twitter 서비스 비활성화
 from app.services.threads_service import ThreadsService
 from app.services.llm_service import LLMService
 from app.services.progress_service import progress_service
@@ -18,7 +18,7 @@ router = APIRouter()
 
 # 서비스 인스턴스 생성
 reddit_service = RedditService()
-twitter_service = TwitterService()
+# twitter_service = TwitterService()  # Twitter 서비스 비활성화
 threads_service = ThreadsService()
 llm_service = LLMService()
 
@@ -144,9 +144,10 @@ async def search_and_analyze(
         tasks = []
         logger.info(f"Starting search on platforms: {request.sources}")
         
-        if "twitter" in request.sources:
-            logger.info("Adding Twitter search task")
-            tasks.append(asyncio.to_thread(twitter_service.search_posts, request.query))
+        # Twitter 서비스 비활성화
+        # if "twitter" in request.sources:
+        #     logger.info("Adding Twitter search task")
+        #     tasks.append(asyncio.to_thread(twitter_service.search_posts, request.query))
         if "threads" in request.sources:
             logger.info("Adding Threads search task")
             tasks.append(asyncio.to_thread(threads_service.search_posts, request.query))
@@ -333,12 +334,13 @@ async def get_trending_topics():
         logger.error(f"Error getting Reddit trending: {e}")
         trending["reddit"] = []
     
-    # Twitter 트렌딩
-    try:
-        trending["twitter"] = await twitter_service.get_trending_topics()
-    except Exception as e:
-        logger.error(f"Error getting Twitter trending: {e}")
-        trending["twitter"] = []
+    # Twitter 트렌딩 - 서비스 비활성화
+    # try:
+    #     trending["twitter"] = await twitter_service.get_trending_topics()
+    # except Exception as e:
+    #     logger.error(f"Error getting Twitter trending: {e}")
+    #     trending["twitter"] = []
+    trending["twitter"] = []  # Twitter 서비스 비활성화
     
     # Threads 트렌딩
     try:

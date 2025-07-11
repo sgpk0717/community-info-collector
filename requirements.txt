@@ -7,7 +7,7 @@ psycopg2-binary==2.9.10
 alembic==1.14.0
 httpx>=0.23.0,<0.28
 praw==7.8.1
-tweepy==4.14.0
+# tweepy==4.14.0  # Python 3.13 호환성 문제로 비활성화
 python-dotenv==1.0.1
 openai==1.58.1
 anthropic==0.40.0
